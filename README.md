@@ -3,5 +3,5 @@ Questo portfolio raccoglie esercizi e case study di data science e machine learn
 Questi progetti sono stati sviluppati durante il master in Data Science che ho seguito.
 Vi sono inoltre:
 - il codice che è il core principale del progetto di tesi (una analisi di un ipotetico servizio di car sharing autonomo), la parte principale del codice è un simulatore del servizio di car sharing
-- una demo di una applicazione per BI generativa sviuluppata interamente in pyhton
+- una demo di una applicazione per BI generativa sviuluppata interamente in pyhton (backend con FastApi e frontend con Panel)
 - una serie di modelli predittivi deployati come Azure functions. (via Docker image come contenarized app functions)
