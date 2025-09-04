@@ -1,0 +1,436 @@
+---
+title: "Analisi del mercato Immobiliare del Texas"
+author: "Stefano Provera"
+output: html_document
+---
+
+L'azienda Texas Realty Insights desidera analizzare le tendenze del mercato 
+immobiliare nello stato del Texas, sfruttando i dati storici relativi alle 
+vendite di immobili. L'obiettivo è fornire insight statistici e visivi che 
+supportino le decisioni strategiche di vendita e ottimizzazione delle inserzioni immobiliari.
+
+#### Load necessary libraries (i had already installed them while following the course)
+```{r, echo=T, results='hide', message=F, warning=F}
+library(dplyr)
+library(ggplot2)
+library(moments) # For skewness and kurtosis
+```
+
+#### 1) Variable Analysis
+```{r}
+setwd("~/File eseguibili R/dataset")
+data = read.csv("realestate_texas.csv", sep = ',')
+summary(data)
+```
+
+Looking at the summary and at the actual data in the environment tab we can see that:
+
+- city is a char variable, representing a categorical feature. It can be used to make conditional analysis based on the city
+- month and year are both integers and are two discrete time variables. They can be used to identify trends and patterns during the time (like seasonality) 
+- sales and listings are two integer variables. Here maybe we can make some analysis on the sales reported in a certain period based on other variables
+- volume, median_price and month inventory are 3 continuous numeric variables. Here we have probably the most important economic feature (volume).
+- median price could be compared with the volume/sales (average price) in order to get an idea of the skewness of the house sold for that specific record
+
+
+#### 2) Statistical Analysis (Position, Variability, and Shape)
+```{r}
+attach(data)
+
+# sales feature
+sales_summary <- data %>%
+  summarise(
+    # Position
+    median_sales = median(sales),
+    min_sales = min(sales),
+    Q1_sales = quantile(sales, 0.25), # 1st Quartile
+    mean_sales = mean(sales),
+    Q3_sales = quantile(sales, 0.75), # 3rd Quartile
+    max_sales = max(sales),
+    
+    # Variability
+    sd_sales = sd(sales), # Standard Deviation
+    iqr_sales = IQR(sales), # Interquartile Range
+    cv_sales = (sd_sales / mean_sales) * 100, # Coefficient of Variation in percentage
+
+    # Shape
+    skew_sales = skewness(sales),
+    kurt_sales = kurtosis(sales)-3
+  )
+
+
+boxplot(sales~city)
+```
+```{r}
+# volume feature 
+volume_summary <- data %>%
+  summarise(
+    # Position
+    median_volume = median(volume),
+    min_volume = min(volume),
+    Q1_volume = quantile(volume, 0.25), # 1st Quartile
+    mean_volume = mean(volume),
+    Q3_volume = quantile(volume, 0.75), # 3rd Quartile
+    max_volume = max(volume),
+    
+    # Variability
+    sd_volume = sd(volume), # Standard Deviation
+    iqr_volume = IQR(volume), # Interquartile Range
+    cv_volume = (sd_volume / mean_volume) * 100, # Coefficient of Variation in percentage
+    
+    # Shape
+    skew_volume = skewness(volume),
+    kurt_volume = kurtosis(volume)-3
+  )
+boxplot(volume~city)
+```
+
+```{r}
+# median_price feature
+median_price_summary <- data %>%
+  summarise(
+    # Position
+    median_median_price = median(median_price),
+    min_median_price = min(median_price),
+    Q1_median_price = quantile(median_price, 0.25), # 1st Quartile
+    mean_median_price = mean(median_price),
+    Q3_median_price = quantile(median_price, 0.75), # 3rd Quartile
+    max_median_price = max(median_price),
+    
+    # Variability
+    sd_median_price = sd(median_price), # Standard Deviation
+    iqr_median_price = IQR(median_price), # Interquartile Range
+    cv_median_price = (sd_median_price / mean_median_price) * 100, # Coefficient of Variation in percentage
+    
+    # Shape
+    skew_median_price = skewness(median_price),
+    kurt_median_price = kurtosis(median_price)-3
+  )
+
+boxplot(median_price~city)
+```
+
+```{r}
+# listings feature
+listings_summary <- data %>%
+  summarise(
+    # Position
+    median_listings = median(listings),
+    min_listings = min(listings),
+    Q1_listings = quantile(listings, 0.25), # 1st Quartile
+    mean_listings = mean(listings),
+    Q3_listings = quantile(listings, 0.75), # 3rd Quartile
+    max_listings = max(listings),
+    
+    # Variability
+    sd_listings = sd(listings), # Standard Deviation
+    iqr_listings = IQR(listings), # Interquartile Range
+    cv_listings = (sd_listings / mean_listings) * 100, # Coefficient of Variation in percentage
+    
+    # Shape
+    skew_listings = skewness(listings),
+    kurt_listings = kurtosis(listings)-3
+  )
+boxplot(listings~city)
+```
+
+```{r}
+# months_inventory feature ##
+months_inventory_summary <- data %>%
+  summarise(
+    # Position
+    median_months_inventory = median(months_inventory),
+    min_months_inventory = min(months_inventory),
+    Q1_months_inventory = quantile(months_inventory, 0.25), # 1st Quartile
+    mean_months_inventory = mean(months_inventory),
+    Q3_months_inventory = quantile(months_inventory, 0.75), # 3rd Quartile
+    max_months_inventory = max(months_inventory),
+    
+    # Variability
+    sd_months_inventory = sd(months_inventory), # Standard Deviation
+    iqr_months_inventory = IQR(months_inventory), # Interquartile Range
+    cv_months_inventory = (sd_months_inventory / mean_months_inventory) * 100, # Coefficient of Variation in percentage
+    
+    # Shape
+    skew_months_inventory = skewness(months_inventory),
+    kurt_months_inventory = kurtosis(months_inventory)-3
+  )
+boxplot(months_inventory~city)
+```
+
+```{r}
+# View results
+sales_summary
+volume_summary
+median_price_summary
+listings_summary
+months_inventory_summary
+```
+
+From the printed summaries we can conclude that:
+
+- sales and volume features have positive kurtosis, this can be seen also in the fact that the median is lower than the mean. Looking at the boxplots based on the city we can see that the positive kurtosis is probably due to the records coming from Wichita Falls, since for this city we have low values
+- we can also see how Wichita Falls has a very low sales and volume compared to the other location, while Tyler has the greatest amount of house sold (probably due to high listings). Nevertheless Bryan college station has the most expensive buildings, and this can be seen if we look at the boxplot of the median price.
+- median price instead has a negative skewness and kurtosis, hence the distribution of this variable should be kind of plated, with data more localized in the right part of the distribution
+- months_inventory seems to be the feature distribution closer to the normal distribution, since it is almost simmetrical (close to 0 skewness) and has also low kurtosis (although i would expect it to follow the Poisson distribution)
+
+
+Analysis of the other variables:
+```{r}
+# other variables --> frequency distribution
+n <- nrow(data)
+
+# Frequency distribution for 'city'
+city_table <- table(data$city)
+distr_freq_city <- as.data.frame(
+  cbind(
+    ni = city_table, # Absolute frequency
+    fi = city_table / n, # Relative frequency
+    Ni = cumsum(city_table), # Cumulative absolute frequency
+    Fi = cumsum(city_table / n) # Cumulative relative frequency
+  )
+)
+
+# Frequency distribution for 'year'
+year_table <- table(data$year)
+distr_freq_year <- as.data.frame(
+  cbind(
+    ni = year_table, # Absolute frequency
+    fi = year_table / n, # Relative frequency
+    Ni = cumsum(year_table), # Cumulative absolute frequency
+    Fi = cumsum(year_table / n) # Cumulative relative frequency
+  )
+)
+
+# Frequency distribution for 'month'
+month_table <- table(data$month)
+distr_freq_month <- as.data.frame(
+  cbind(
+    ni = month_table, # Absolute frequency
+    fi = month_table / n, # Relative frequency
+    Ni = cumsum(month_table), # Cumulative absolute frequency
+    Fi = cumsum(month_table / n) # Cumulative relative frequency
+  )
+)
+
+# Print results
+# Frequency Distribution for City
+print(distr_freq_city)
+freq_city <- table(data$city)
+freq_city
+
+# Frequency Distribution for Year
+print(distr_freq_year)
+freq_year <- table(data$year)
+freq_year
+# Frequency Distribution for Month
+print(distr_freq_month)
+freq_month <- table(data$month)
+freq_month
+
+```
+
+I can already understand from this results that city, year and month are like the primary keys of this table and are used to identify a single record. 
+We have 5 years of data record every month per 4 geographical areas. Hence, if used by themselves, these variables give no statistical information.
+
+#### 3) Identification variables with greater variability and asymmetry
+- If we look at the summaries printed in the previous step we can see that the variable with greater variability is "volume" since it has the biggest conditional variation
+- The most asymmetric variable is volume, too, since it has the biggest skewness in absolute value
+
+
+#### 4) Classes creation for a quantitative variable
+
+```{r}
+# subdivision `median_price` in classes
+n= length(data$median_price)
+breaks <- seq(70000, 180000, length.out = 12)
+data$Price_Class <- cut(median_price, breaks = breaks)
+
+# frequency distribution
+price_freq <- table(data$Price_Class)/n
+labels <- c("70k-80k","80k-90k","90k-100k","100k-110k","110k-120k","120k-130k","130k-140k","140k-150k","150k-160k","160k-170k","170k-180k")
+barplot(price_freq, main = "Distribution Median Price", col = "blue",
+        names.arg = labels,
+        las = 2, 
+        cex.names = 0.6, 
+        xlab = "Price (in $)", 
+        ylab = "Relative Frequency")
+
+
+# Gini Index
+gini.index = function(x){
+  ni=table(x)
+  fi=ni/length(x)
+  fi2=fi^2
+  J = length(table(x))
+  
+  gini = 1-sum(fi2)
+  gini.normalizzato = gini/((J-1)/J)
+  
+  return (gini.normalizzato)
+}
+
+gini_index = gini.index(data$Price_Class)
+gini_index
+
+```
+
+
+- From the barplot representing the median price variable we can see that the distribution tends to be shifted towards the right, indicating a negative skewness. 
+- We can see a local minimum in the class 110k-120k, it is probably due the high difference in house prices of wichita falls compared to the others
+- Normalized gini index is 0.96, meaning we have high heterogeneity in the classes considered
+
+#### 5) Probability calculations
+```{r}
+p_beaumont <- mean(city == "Beaumont") 
+# i'm using the mean on a boolean vector, which gives as a result the number of TRUE elements divided by the length of the vector, which is exactly the probability of extracting Beaumont taking a random row in the dataset
+p_july <- mean(month == "7")
+p_dec_2012 <- mean(month == "12" & year == 2012)
+
+p_beaumont
+p_july
+p_dec_2012
+```
+
+
+#### 6) Creation new variables
+```{r}
+data <- data %>%
+  mutate(
+    Avg_Price = volume / sales * 1000000,  
+    Effectiveness = sales / listings
+  )
+
+summary(data$Avg_Price)
+summary(data$Effectiveness)
+boxplot(data$Avg_Price~city)
+boxplot(data$Effectiveness~city)
+
+```
+
+- the avg price has been calculated as total volume sold divided by the number of sales and then multiplied by 1 milion in order to make it comparable with the median price
+- the avg_Price boxplot is quite similar to the median price one
+- i calculated the effectiveness of listings as the number of sales done divided by the number of active listing, this variable can give us an idea on how useful the listing is
+- surpisingly we notice that listings in Tyler have the lowest effectiveness (compared to the other cities), although we remember from section 2 that this city has the greatest number of active listings (very high if compared to others). 
+- the highest effectiveness is registered in bryan-college station (also Wichita falls performs well), hence the company should try to focus its adv strategy in these two areas
+
+
+#### 7-8) Conditional Analysis and visualization using ggplot
+```{r}
+# analysis of the sales and price over time, considering all the cities together
+# Create a combined "Year-Month" column for grouping
+data <- data %>%
+  mutate(Year_Month = paste0(year, sprintf("%02d", month)))
+
+# Aggregate data by year and month
+aggregated_data <- data %>%
+  group_by(Year_Month) %>%
+  summarise(
+    Total_Sales = sum(sales),
+    Avg_Median_Price = mean(median_price)
+  ) %>%
+  arrange(Year_Month) # Sort by date
+
+# Line chart total sales over time
+ggplot(aggregated_data, aes(x = Year_Month)) +
+  geom_line(aes(y = Total_Sales, color = "Total Sales", group = 1), linewidth = 1) +
+  labs(
+    title = "Trends in Total Sales Over Time",
+    x = "Time (Year-Month)",
+    y = "Value",
+    color = "Legend"
+  ) +
+  scale_x_discrete(breaks = c("201001","201101","201201","201301","201401")) + 
+  scale_y_continuous(sec.axis = sec_axis(~ ., name = "Median Price (USD)")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+- this line plot suggests that we have a strong seasonality effect in the total number of sales
+- we can clearly see some peaks during the spring/summer months, and valleys in the winter season
+- this plot suggests also that the number of houses sold is increasing over the time
+
+```{r}
+# Line chart average price over time
+ggplot(aggregated_data, aes(x = Year_Month)) +
+  geom_line(aes(y = Avg_Median_Price, color = "Median Price", group = 1), linewidth = 1) +
+  labs(
+    title = "Trends in Median Price Over Time",
+    x = "Time (Year-Month)",
+    y = "Value",
+    color = "Legend"
+  ) +
+  scale_x_discrete(breaks = c("201001","201101","201201","201301","201401")) +
+  scale_y_continuous(sec.axis = sec_axis(~ ., name = "Median Price (USD)")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+- from this plot we cannot notice clear trends, a part from the fact that the median price seems to be increasing over time
+
+```{r}
+# analysis of the sales and price over time, considering distinct cities and grouping by month to have a better look at the seasonality effects
+# Filter for the cities and group by city and month
+aggregated_data <- data %>%
+  filter(city %in% c("Beaumont", "Bryan-College Station", "Tyler", "Wichita Falls")) %>%
+  group_by(city, month) %>%
+  summarise(
+    Total_Sales = sum(sales),
+    Avg_Median_Price = mean(median_price)
+  ) %>%
+  ungroup()
+
+# plot
+ggplot(aggregated_data, aes(x = month)) +
+  geom_line(aes(y = Total_Sales, color = "Total Sales"), linewidth = 1) +
+  facet_wrap(~ city) + # Create one plot per city
+  labs(
+    title = "Trends in Total Sales by Month",
+    x = "Month",
+    y = "Value",
+    color = "Legend"
+  ) +
+  scale_x_continuous(breaks = 1:12, labels = month.name) + # Label months by name
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+```
+
+- this four plots confirm us the effect of the seasonality that we noticed in the linechart grouped by year and month.
+- we can also notice that this seasonality effect seems to be greater for Bryan-Collage Station and Tyler cities, while it has a minor impact on the other two cities
+
+```{r}
+# plot
+ggplot(aggregated_data, aes(x = month)) +
+  geom_line(aes(y = Avg_Median_Price, color = "Median Price"), linewidth = 1) +
+  facet_wrap(~ city) + # Create one plot per city
+  labs(
+    title = "Trends in median price by Month",
+    x = "Month",
+    y = "Value",
+    color = "Legend"
+  ) +
+  scale_x_continuous(breaks = 1:12, labels = month.name) + # Label months by name
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+```
+
+- this plot suggests us that there is no better moment when to buy a house, since all the lines seems quite horizontal
+
+#### 9) Conclusions
+Summing up we can conclude that:
+
+1. Wichita Falls has on average the cheapest houses, while bryan-college station the most expensive
+2. Despite of Bryan-college station having the most expensive houses, the overall volumes are a bit higher for Tyler city, and this is due to a massive advertising policy for this city which causes a big number of houses sold
+3. The huge advertising policy in Tyler is not justified from the results, since we have seen that the effectiveness of this ads policy is not so good (especially compared to bryan-college station)
+4. A clear seasonality effect is evident in the sales done (and consequently in the volumes sold), with valleys in January and peaks which varies a little from year to year (but anyway in between april-august time span)
+5. Through the five year of analysis we could see a progressive increase in the average price of the houses and on the total amount of houses sold

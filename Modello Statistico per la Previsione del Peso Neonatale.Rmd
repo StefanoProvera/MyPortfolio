@@ -1,0 +1,648 @@
+---
+title: "Modello Statistico per la Previsione del Peso Neonatale"
+author: "Stefano Provera"
+date: "2025-01-29"
+output: html_document
+---
+
+
+The project is part of a context of growing attention to the prevention of neonatal complications. The ability to predict the birth weight of newborns represents a key opportunity to improve clinical planning and reduce the risks associated with problematic births, such as premature births or low-birth weight infants.
+
+#### Loading necessary libraries
+```{r, echo=T, results='hide', message=F, warning=F}
+library(dplyr)
+library(lmtest)
+library(ggplot2)
+library(MASS)
+library(ggeffects)
+library(moments) 
+library(knitr) 
+library(kableExtra)
+```
+
+### 1) Data collection and Dataset structure
+I begin with an exploration of the dataset:
+```{r}
+setwd("~/File eseguibili R/dataset")
+data = read.csv("neonati.csv", sep = ',',stringsAsFactors = T)
+summary(data)
+
+head(data)
+str(data)
+```
+
+### 2) Analyisis and modelling
+
+Let's take a look at the density and boxplot of the variables, (just the numerical variables)
+
+```{r}
+
+attach(data)
+list_features = c('Anni.madre','N.gravidanze','Gestazione','Peso','Lunghezza','Cranio')
+
+# Set up the plotting area
+par(mfrow = c(1, 2)) 
+
+for (i in list_features){
+  boxplot(data[[i]], main = i)
+  
+  #label generation
+  x_label <- gsub("\\.", " ", tolower(i))
+  if (i == 'Gestazione'){
+    x_label = 'mesi di gestazione'
+  }
+  
+  if (i == 'N.gravidanze' || i == 'Gestazione' || i == 'Anni.madre'){
+    hist(data[[i]], main = i, xlab = x_label)
+  }  else{
+  plot(density(data[[i]]), main = i)
+  }
+}
+
+```
+
+Looking at the boxplot showing the age of the mother at birth, it seems clear that a couple of value cannot be realistic (age lower than 10 yo).
+I'll proceed analyzing these records and later on remove these.
+
+```{r}
+
+incorrect_values <- data[data$Anni.madre < 10,]
+# Print as a formatted table
+kable(incorrect_values, caption = "Records with 'Anni.madre' < 10") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+data <- data[!(data$Anni.madre < 10 ), ]
+
+```
+
+Even though the other values recorded for these two observations seem correct, (so probably the age was misspelled), I'm going to remove them from the dataset. If Anni.madre was an important variable to determine the weight of the baby, these two records would introduce a huge bias in the estimation of the correct $\beta$ parameter.
+
+### Now let's take a closer look at the categorical features
+```{r}
+# Create a table and convert it to a data frame
+smoking_table <- as.data.frame(table(data$Fumatrici))
+
+# Rename columns for clarity
+colnames(smoking_table) <- c("Maternal Smoking", "Frequency")
+
+# Print as a formatted table
+kable(smoking_table, 
+      caption = "Distribution of Maternal Smoking",
+      col.names = c("Maternal Smoking", "Frequency")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+boxplot(data$Peso ~ data$Fumatrici, 
+        main = "Boxplot of Birth Weight by Maternal Smoking",
+        xlab = "Maternal Smoking (0 = Non-Smoker, 1 = Smoker)", 
+        ylab = "Birth Weight (grams)",
+        col = c("green", "red"),
+        border = "black")
+
+
+birth_type_table <- as.data.frame(table(data$Tipo.parto))
+colnames(birth_type_table) <- c("Birth Type", "Frequency")
+kable(birth_type_table, 
+      caption = "Distribution of Birth Type",
+      col.names = c("Birth Type", "Frequency")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+boxplot(data$Peso ~ data$Tipo.parto, 
+        main = "Boxplot of Birth Weight by Delivery Type",
+        xlab = "Delivery Type (Ces = Cesarean, Nat = Natural)", 
+        ylab = "Birth Weight (grams)",
+        col = c("lightblue", "lightpink"),
+        border = "black")
+
+# Table for Hospital (Ospedale)
+hospital_table <- as.data.frame(table(data$Ospedale))
+colnames(hospital_table) <- c("Hospital", "Frequency")
+
+kable(hospital_table, caption = "Distribution of Births by Hospital") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+# Boxplot for Hospital
+boxplot(data$Peso ~ data$Ospedale,
+        main = "Birth Weight by Hospital",
+        xlab = "Hospital",
+        ylab = "Birth Weight (grams)",
+        col = c("lightblue", "lightgreen", "pink"), # Add colors
+        border = "black")
+
+sex_table <- as.data.frame(table(data$Sesso))
+colnames(sex_table) <- c("Sex", "Frequency")
+
+kable(sex_table, caption = "Distribution of Births by Sex") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+# Boxplot for Sex
+boxplot(data$Peso ~ data$Sesso,
+        main = "Birth Weight by Sex",
+        xlab = "Sex (F = Female, M = Male)",
+        ylab = "Birth Weight (grams)",
+        col = c("lightblue", "lightpink"),
+        border = "black")
+
+```
+
+Looking at boxplot printed it seems that "Fumatrici" and "Sex" could be useful features to predict the weight of the baby, since the boxplots have a slightly different shape considering these distinctions.
+
+
+Now in the image below we can see the graphical representation of one variable of the dataset as a function of another to understand any relation. In addition, we also have a measure of the pairwise correlations among the variables.
+This visualization will be useful when creating the regression model, because it gives us information on which variables should be considered in the model.
+```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+
+pairs(data[,c("Anni.madre","N.gravidanze","Gestazione","Peso","Lunghezza","Cranio")], upper.panel = panel.smooth, lower.panel = panel.cor)
+
+```
+
+#### 1 - Let's check whether in some hospitals we have more cesarean births than in others
+
+Since we are considering categorical features, assuming the usual hypotesis of random sampling and uncorrelation and independence in the elements of the sample we can use a $X^2$ test
+```{r}
+# Relative frequency of cesarean births by hospital
+birth_table <- table(data$Ospedale, data$Tipo.parto)
+
+relative_frequencies <- prop.table(birth_table, margin = 1)[, "Ces"]
+
+df_rf <- data.frame(
+  Categoria = names(relative_frequencies),
+  Frequenza = as.numeric(relative_frequencies)
+)
+
+# Create table with kable
+kable(df_rf, 
+      col.names = c("Hospital", "Relative Frequency"),
+      digits = 3,              # numero di cifre decimali
+      caption = "Relative Frequency of Hospital Births Considering only Cesarean births") %>% 
+  kable_styling(full_width = FALSE)
+
+# Temporary table
+tab <- table(data$Ospedale, data$Tipo.parto)
+
+# Test del chi-quadrato
+chi_test <- chisq.test(tab)
+chi_test
+
+```
+Since we have a p-value of 0.58 we can firmly affirm that the number of Cesearan births is not significantly different from one hospital to the other, we cannot reject $H_0$. We had also an hint of this looking at the relative frequency of ceasarean birth in each hospital, they are very close one to each other.
+
+
+#### 2 - The average weight and length of this sample of infants are significantly equal to those of the population
+
+Looking at data available online it seems that the medium weight at birth is about 3300 g, while the length is 500mm
+
+[ospedalebambinogesu](https://www.ospedalebambinogesu.it/da-0-a-30-giorni-come-si-presenta-e-come-cresce-80012/#:~:text=In%20media%20il%20peso%20nascita%20%C3%A8%20di%20circa,riguarda%20la%20lunghezza,%20pari%20mediamente%20a%2050%20centimetri.)
+
+[my-personaltrainer](https://www.my-personaltrainer.it/salute/lunghezza-neonato.html)
+
+Since we don't know the real distribution of these features (hence neither the real variance) we can proceed using a t_test.
+```{r}
+mu_weight = 3300
+mu_length = 500
+
+# T Test for weight
+peso_test <- t.test(data$Peso, mu = mu_weight) 
+peso_test
+
+# T Test for length
+lunghezza_test <- t.test(data$Lunghezza, mu = mu_length)
+lunghezza_test
+
+```
+Looking at these results we can conclude that the weights of the babies in this sample is not significantly different from the considered true mean (if we use a classic 5 % significance level), while a different consideration has to be done for the length, since the p-value is close to 0 we can be sure that the mean length is significantly different from 500 mm 
+
+
+#### 3 - Check whether the weight (or length) of the baby is significantly different considering one sex with respect to the other
+Also in this case I proceed with a t-test
+
+```{r}
+# Test t for weight
+peso_sesso_test <- t.test(Peso ~ Sesso, data = data)
+peso_sesso_test
+
+# Test t for length
+lunghezza_sesso_test <- t.test(Lunghezza ~ Sesso, data = data)
+lunghezza_sesso_test
+
+```
+In both tests we reject $H_0$, so this means that the newborn is significantly different if we consider a male or a female (hence the sex variable will be almost certainly included in the regression model)
+
+
+
+### Creation regression model 
+
+I start checking normality in the target variable.
+
+```{r}
+# Compute skewness and round to two decimal places
+skewness_value <- round(moments::skewness(data$Peso), 2)
+cat("Skewness:", skewness_value, "\n")
+
+# Compute excess kurtosis and round to two decimal places
+kurtosis_value <- round(moments::kurtosis(data$Peso) - 3, 2)
+cat("Excess Kurtosis:", kurtosis_value, "\n")
+shapiro.test(data$Peso)
+
+```
+
+As we would expect we have to refuse normality in the target variable (although the distribution has many low values, the skewness is negative overall, and the distribution is a bit peaky, giving positive kurtosis).
+Therefore we won't expect normal residuals, when we'll proceed with residuals validation.
+
+
+Giving the considerations done in the previous steps, I would expect that the relevant variables to describe the weight are 
+
+- "Fumatrici"
+- "Sex"
+- "Gestazione"
+- "Lunghezza" 
+- "Cranio"
+
+(the last three variables are a bit correlated one to each other, so I'll have to check for multicollinearity and if it is valuable to use them all).
+
+```{r}
+
+# let's start with a model with everything
+
+mod1 = lm(Peso~., data= data)
+summary(mod1)
+
+```
+
+As we would expect giving to the model all the variables we obtain a bit a mess.
+
+Let's try again removing Anni.madre and Ospedale which for sure are not a relevant factors (actually Ospedale 3 seems to differ a bit from the other two, but anyway the p value is not so low)
+
+
+```{r}
+
+# removing anni.madre and Ospedale
+
+mod2 = update(mod1,~.-Anni.madre-Ospedale)
+summary(mod2)
+
+```
+I tried removing other variables before Fumatrici, because I would expect it to be relevant, but it's not (although the estimate is quite big, there is high variability, hence the standard error is very high giving a p value very high).
+
+Instead N.Gravidanze and the type of birth seems to have effects on the description of the target variable.
+
+
+```{r}
+
+# remove fumatrici
+
+mod3 = update(mod2,~.-Fumatrici)
+summary(mod3)
+
+```
+
+
+
+Here we could already be somewhat happy with the results obtained, the adjusted r squared is still high 0.73, and very close to the one obtained from the model with all the regressors.
+But since we look for semplicity and a parsimonious model, I'll try in the next steps at removing other variables and see what happens.
+
+
+```{r}
+
+# remove Tipo.parto and n.gravidanze
+
+mod4 = update(mod3,~.-Tipo.parto-N.gravidanze)
+summary(mod4)
+
+```
+Removing Tipo.parto and n.gravidanze almost doesn't affect the results (R-squared still 0.73). So I'll go on excluding them from the model.
+
+Now I would like to check whether we have multicollinearity in the remaining variables.
+
+
+```{r}
+
+vif_values <- car::vif(mod4)
+
+# Convert VIF results to a data frame (fixing the structure)
+vif_table <- data.frame(
+  Variable = rownames(as.data.frame(vif_values)),  
+  VIF = round(as.numeric(vif_values), 2)         
+)
+
+# Print formatted table
+kable(vif_table, 
+      caption = "Variance Inflation Factor (VIF) for Model Variables",
+      col.names = c("Variable", "VIF")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+We can see a moderate correlation among these values, but the vif values are still far under 5.
+Let's try anyway to remove one of these variables and see how the model changes. We could try removing Cranio variable.
+
+
+```{r}
+
+mod5 = update(mod4,~.-Cranio)
+summary(mod5)
+
+```
+
+
+Here the R-squared drops significantly, therefore we should keep this feature in the model
+
+
+Let's try to see if we have interactions among some variables (i can't think at any possible interaction that makes sense a part from Sesso combined with other features, let's try with gestazione) 
+
+```{r}
+# i start from model 4 since it seemed the best so far
+mod6 = update(mod4,~.+Sesso:Gestazione)
+summary(mod6)
+
+```
+This clearly makes the model worse than before.
+
+
+Let's check if we have non linear effects: Gestazione seems to have a quadratic effect (especially at low months).
+
+
+```{r}
+
+
+mod7 = update(mod4,~.+I(Gestazione^2))
+summary(mod7)
+
+mod8 = update(mod7,~.-Gestazione)
+summary(mod8)
+
+```
+The last model considering quadratic Gestazione has a slighly better adjusted R-squared than the same model with linear Gestazione (mod4).
+
+
+Now let's look at the AIC and BIC values of all the models created (I expect model 4 and 8 to be the best).
+
+
+```{r}
+# Compute AIC and convert it into a data frame
+aic_values <- AIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8)
+aic_table <- data.frame(Model = rownames(aic_values), 
+                        DF = aic_values$df, 
+                        AIC = round(aic_values$AIC, 2))
+
+# Print formatted AIC table
+kable(aic_table, 
+      caption = "Akaike Information Criterion (AIC) for Model Comparison",
+      col.names = c("Model", "Degrees of Freedom", "AIC")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+# Compute BIC and convert it into a data frame
+bic_values <- BIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8)
+bic_table <- data.frame(Model = rownames(bic_values), 
+                        DF = bic_values$df, 
+                        BIC = round(bic_values$BIC, 2))
+
+# Print formatted BIC table
+kable(bic_table, 
+      caption = "Bayesian Information Criterion (BIC) for Model Comparison",
+      col.names = c("Model", "Degrees of Freedom", "BIC")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+AIC tends to prefer a bit more complex  models, hence it give the lowest score to the first model. But if look at BIC it is clear that the best is the last one
+(one interesting things to notice is how worse the model 5 is, so we cannot remove Cranio although is highly correlated with Lunghezza).
+
+
+
+Let's try to check what we get if we use stepAIC function.
+
+```{r}
+
+n = nrow(data)
+
+
+stepwise.mod = MASS::stepAIC(mod1,direction="both",k=log(n))
+
+summary(stepwise.mod)
+
+
+```
+The automatic selection of the model includes also the N.gravidanze feature, which I had removed in my process of selection of the model. Let's try modifying model with quadratic Gestazione adding N.gravidanze and see if we could improve BIC value.
+
+```{r}
+mod9 = update(mod8,~.+N.gravidanze)
+summary(mod9)
+
+bic_values <- BIC(stepwise.mod, mod8, mod9)
+
+# Convert BIC results to a data frame
+bic_table <- data.frame(
+  Model = rownames(bic_values), 
+  DF = bic_values$df, 
+  BIC = round(bic_values$BIC, 2)  # Round to 2 decimal places
+)
+
+# Print formatted BIC table
+kable(bic_table, 
+      caption = "Bayesian Information Criterion (BIC) for Model Comparison",
+      col.names = c("Model", "Degrees of Freedom", "BIC")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+The output given from the stepwise mod function is not as good as model 8 or 9.
+Model 9 has a slightly better BIC the model 8 (also an adjusted R-squared which is a bit better), hence I will conclude that this model 9 is the best among those tried.
+
+
+### Analysis obtained model
+The final considered model is $$
+\hat{Y}_{\text{peso}} 
+= -6100
++ 10.26 \times \text{Lunghezza}
++ 10.56 \times \text{Cranio}
++ 77.31 \times \text{SessoM}
++ 0.4386 \times (\text{Gestazione})^2
++ 12.53 \times \text{N.gravidanze}.
+$$
+Looking at the $R^2$ value (0.73) we can say that the model is able to "explain" 73% of the variability of the model, which is quite a good value in a real case.
+
+Now it's time to make an analysis on the residuals of the model.
+
+```{r}
+par(mfrow=c(1,2))
+plot(residuals(mod9))
+abline(h=mean(residuals(mod9)),col=2)
+plot(density(residuals(mod9)))
+
+
+
+bptest(mod9) # no constant variance
+dwtest(mod9) # no autocorrelation
+shapiro.test(residuals(mod9)) # here we refuse normality
+
+
+
+```
+
+
+The residuals seems to be evenly spread along the zero line, so this is a good sign. Nevertheless some values seem to be far away from the 0 value, in particular there is a record with a huge error value, I will inspect it later.
+
+Breusch-Pagan test gives back a p-value close to 0, hence we must refuse homoskedasticity (probabily this is due to some outliers).
+Durbin-Watson instead gives a p-value of 0.12, which indicates we cannot refuse the hypotesis of independece among the residuals. There is no autocorrelation among the residuals.
+Shapiro test has a p-value close to zero indicating that the residuals don't follow a normal distribution, but we could expect this fact considering that the target variable PESO is not normal either.
+
+
+Now it's time to inspec leverages and outliers:
+
+```{r}
+## leverage
+lev = hatvalues(mod9)
+plot(lev)
+p=sum(lev)
+#threshold which indicates leverage values
+threshold = 2*p/n
+abline(h=threshold,col=2)
+
+# outliers
+plot(rstudent(mod9))
+abline(h=c(-2,2),col=2)
+
+cook = cooks.distance(mod9)
+plot(cook)
+max_cook <- round(max(cook), 3)
+cat("Maximum Cook's Distance:", max_cook, "\n")
+```
+
+From the first plot we can notice many leverage values, there are also quite a lot of outliers in the residuals, but the major inconvenient comes out looking at cook distance plot, there is a value equal to 0.825.
+
+Let's check in detail this record:
+
+```{r}
+number_influent_record <- which(unname(cook) > 0.5)
+influent_record = data[number_influent_record,]
+# Print formatted influential record table
+kable(influent_record, 
+      caption = "Details of Influential Records (Cook's Distance > 0.5)") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+Looking at this record we can clearly notice that there is an issue with the Lunghezza field. We have quite an heavy baby, but a length of the body which doesn't match. 
+I don't have enough information to understand whether this is just an error while recording the data, or if it is due to some strange illness (maybe some form of Nanism).
+What we know is that for sure it is influent and has a great impact on our model.
+
+Overall the metrics associated with the residuals don't provide very good results. 
+My opinion is that the model in most cases can capture quite well the weight of a baby, but there are some  particular cases (especially the one analyzed before) in which the predicted weight is different from the real one, and this could be due to other factors which are not in the dataset of this project. 
+There could be strange pathologies that can affect a lot PESO feature and hence provide a huge variability in the results, this can be also the reason why the residuals don't have constant variance.
+
+### 3. Prediction and Results
+Let's now make some prediction using the model described in the previous section.
+Let's estimate the weight of a baby girl born from a mother at the third pregnancy at the 39th week.
+
+My model consider also LUNGHEZZA and CRANIO as regressors, hence for these values I will consider the mean.
+
+
+
+```{r}
+mean_lunghezza <- mean(data$Lunghezza, na.rm = TRUE)
+mean_cranio <- mean(data$Cranio, na.rm = TRUE)
+gender = 'F'
+n_pregnancy = 3
+weeks = 39
+
+# Create a data frame with the required predictors
+new_data <- data.frame(
+  Lunghezza = mean_lunghezza,
+  Cranio = mean_cranio,
+  Sesso = factor(gender), 
+  Gestazione = weeks,
+  N.gravidanze = n_pregnancy
+)
+
+
+predicted_value <- predict(mod9, newdata = new_data)
+# Convert to data frame and round the value
+pred_table = data.frame(Predicted_Weight = round(predicted_value, 2))
+kable(pred_table, 
+      caption = "Predicted Birth Weight Based on Model 9", 
+      col.names = c("Predicted Weight (grams)")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+
+
+### 4. Visualizations
+
+As first visualization i would like to have an idea of the difference between observed values and those estimated by the model
+
+
+```{r}
+data$predicted <- predict(mod9)
+data$residuals <- residuals(mod9)
+
+ggplot(data, aes(x = predicted, y = Peso)) +
+  geom_point(alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Predicted Weight", y = "Observed Weight",
+       title = "Comparison of Observed and Predicted Weight") +
+  theme_minimal()
+
+```
+
+From the plot we can notice how the model perform quite well for weight around the medium - high weights, but tends to underestimate the weight when the observed value is low. 
+We can say that in case of low weights the model is not reliable.
+
+
+Now, for example, we can check how the Gestazione feature affect the weight.
+
+```{r}
+
+
+
+min(Gestazione)
+max(Gestazione)
+
+# Restrict gestation weeks from 25 to 43 in steps of 1
+eff_gest <- ggpredict(mod9, terms = "Gestazione [25:43 by=1]")
+
+ggplot(eff_gest, aes(x = x, y = predicted)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), 
+              fill = "blue", alpha = 0.2) +
+  labs(x = "Gestation Weeks",
+       y = "Predicted Birth Weight (grams)",
+       title = "Effect of Gestation Weeks on Predicted Birth Weight") +
+  theme_minimal()
+```
+
+
+As we would expect the weight increases wit the number of the gestation weeks, and we can also notice that we have a greater variability in low and high values, hence (as we could see also in the previous plot) the "extreme" values are very difficult to estimate.
+This is due to low and high values which are less represented in the dataset and also because in these areas the trend doesn't appear to be linear.
+
+
+Now we can see again the boxplot representing how the mother smoking feature affects the birth weight.
+
+
+```{r}
+ggplot(data, aes(x = factor(Fumatrici), y = Peso, fill = factor(Fumatrici))) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("skyblue", "tomato"),
+                    labels = c("Non-smoker", "Smoker")) +
+  labs(x = "Mother Smoking Status", 
+       y = "Birth Weight (grams)",
+       title = "Birth Weight Distribution by Mother Smoking Status") +
+  theme_minimal()
+
+```
+
+We can see that it seems that a smoker mother will give birth to slightly lighter baby, but as we have already seen in the previous sections this feature is not statistically relevant.
+
+#### Conclusion
+To conclude, I can say that given the dataset and information provided we are not able to build a 100% satisfactory regression model. 
+The model itself is quite good in the prediction, but has some difficulties with extreme values. These extreme values, not well explained by the model, causes also many problems in the residuals analysis, giving many leverages values, outliers and causing heteroskedasticity.
+We could try using more complex models then the simple linear regression, or maybe the best solution would be to restrict the use of this model within certain ranges.
+
+
+
