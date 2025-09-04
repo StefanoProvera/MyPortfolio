@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "DB_USERNAME": "***",
+    "DB_PASSWORD": "***",
+    "JDBC_HOSTNAME": "data4all.database.windows.net",
+    "JDBC_PORT": "1433",
+    "JDBC_DATABASE": "demo",
+    "MINIMUM_SUPPORT": "10",
+    "MINIMUM_CONFIDENCE": "0.005",
+    "PREDICTION_SPAN": "7"
+  }
+}

@@ -1,0 +1,25 @@
+# DO NOT include azure-functions-worker in this file
+# The Python Worker is managed by Azure Functions platform
+# Manually managing azure-functions-worker may cause unexpected issues
+
+azure-functions==1.21.3
+JayDeBeApi==1.2.3
+jpype1==1.5.1
+pyspark==3.5.4
+numpy==1.26.4
+packaging==24.2
+py4j==0.10.9.7
+Cython==3.0.11
+joblib==1.4.2
+pandas==2.2.3
+patsy==1.0.1
+pmdarima==2.0.4
+python-dateutil==2.9.0.post0
+pytz==2024.2
+scikit-learn==1.6.0
+scipy==1.14.1
+six==1.17.0
+statsmodels==0.14.4
+threadpoolctl==3.5.0
+tzdata==2024.2
+urllib3==2.2.3
