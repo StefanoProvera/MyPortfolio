@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pyodbc         
+pandas    
+pydantic
+os    
+requests       
+python-dotenv 

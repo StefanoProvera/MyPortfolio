@@ -1,0 +1,29 @@
+trigger:
+- main  # quando pushi su main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+# 1. Checkout codice
+- task: Checkout@v2
+
+# 2. Configura Python
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.9'
+
+# 3. Installa e testa backend
+- script: |
+    cd backend
+    pip install -r requirements.txt
+    # Esegui test, se hai test unitari:
+    # pytest --maxfail=1 --disable-warnings
+  displayName: 'Build & Test Backend'
+
+# 4. Installa e testa frontend
+- script: |
+    cd frontend
+    pip install -r requirements.txt
+    # Esegui test, se hai test su Streamlit
+  displayName: 'Build & Test Frontend'
