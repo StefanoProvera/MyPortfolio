@@ -488,7 +488,9 @@ def generate_schema_description() -> str:
 # =============================================================================
 
 def call_llm_to_generate_sql(prompt: str) -> str:
-    openai_api_key = "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" #os.getenv("OPENAI_API_KEY", "CHANGEME")
+    openai_api_key = "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" 
+    #os.getenv("OPENAI_API_KEY", "CHANGEME")
+    ## open_api_key has been disabled before publishing
     headers = {"Authorization": f"Bearer {openai_api_key}"}
     url = "https://api.openai.com/v1/responses"
     payload = {
@@ -650,3 +652,4 @@ def chat_with_llm(chat_msg: ChatMessage):
 # =============================================================================
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
